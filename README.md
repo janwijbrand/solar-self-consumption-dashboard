@@ -92,6 +92,51 @@ self-consumption vs. salderingsregeling exposure — all from your own data.
 
 ---
 
+## Solar forecast model
+
+Element #3 in the dashboard — the 24-hour bar chart — shows expected solar potential as a
+percentage of the realistic clear-sky ceiling for that time of year. Here is how it is calculated.
+
+### 1. Plane-of-Array (POA) irradiance
+
+Raw weather data from Open-Meteo gives irradiance on a *horizontal* surface (GHI, DNI, diffuse).
+The panels are tilted at **20° facing due south**, so the actual irradiance hitting them differs —
+more in winter when the low sun aligns with the tilt, potentially less at high summer noon.
+
+[pvlib](https://pvlib-python.readthedocs.io/) converts the three irradiance components into
+Plane-of-Array (POA) irradiance using the Hay-Davies transposition model, taking into account
+the exact solar position for every forecast hour.
+
+### 2. Per-month ceiling normalisation
+
+A single annual maximum (e.g. 900 W/m²) makes winter days look perpetually poor even on a
+perfectly clear day. Instead, the historical maximum POA value is computed separately for each
+calendar month from the ERA5 archive. A reading of 250 W/m² POA in December is then judged
+against a December ceiling (~300 W/m²) rather than a summer peak — giving a much more
+informative percentage.
+
+### 3. Temperature derating
+
+PV panels lose efficiency as they heat up. The forecast applies a derating factor of
+`1 − max(0, T − 25°C) × PANEL_TEMP_COEF` to the normalised percentage, where
+`PANEL_TEMP_COEF` is the panel's power temperature coefficient (configured in `.env`).
+The SunPower Max3 390W panels installed here have a coefficient of **−0.29 %/°C**, better
+than the standard silicon value of −0.40 %/°C. Temperature forecast data comes from
+Open-Meteo alongside the irradiance data.
+
+### Calibration table (computed at startup)
+
+On the first `/api/forecast` request after startup, the API joins 6+ years of 15-minute
+SolarEdge production data with the hourly Open-Meteo archive to build two artefacts cached
+in memory for the lifetime of the process:
+
+- **Monthly POA ceilings** — historical maximum POA per calendar month, used for normalisation.
+- **Hour × month correction table** — mean `production_W / GHI` ratio for each of the
+  288 hour-of-day × month buckets. Computed for potential future use; the POA model
+  already accounts for panel geometry so this is not applied on top.
+
+---
+
 ## Prerequisites
 
 **Hardware**
@@ -216,5 +261,6 @@ The Vite dev server proxies `/api` to `http://localhost:8000` by default.
   and replaced with animated dots until the next consistent reading arrives.
 - **Production vs. dashboard gap (~3%)**: integrated 15-min power readings vs. inverter
   energy register. Acceptable for analysis purposes.
-- **irradiance model**: uses GHI % of potential as solar proxy — a horizontal-plane
-  approximation. A tilted-panel model would improve forecast accuracy.
+- **Forecast calibration on first request**: the first `/api/forecast` call after a
+  container restart joins years of production and weather data to build the monthly POA
+  ceilings. This takes ~2 seconds and is then cached for the lifetime of the process.
