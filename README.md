@@ -210,6 +210,10 @@ The Vite dev server proxies `/api` to `http://localhost:8000` by default.
 
 ## Known limitations
 
+- **Animated dots in the Consuming card**: when solar production ramps up suddenly, the
+  SolarEdge API can lag a few seconds behind the DSMR smart meter reading. This briefly
+  makes computed consumption negative (physically impossible), so the value is suppressed
+  and replaced with animated dots until the next consistent reading arrives.
 - **Production vs. dashboard gap (~3%)**: integrated 15-min power readings vs. inverter
   energy register. Acceptable for analysis purposes.
 - **irradiance model**: uses GHI % of potential as solar proxy — a horizontal-plane
