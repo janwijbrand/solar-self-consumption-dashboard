@@ -19,18 +19,18 @@
 
 ---
 
-https://github.com/janwijbrand/solar-self-consumption-dashboard
-
-A self-hosted solar energy monitoring dashboard for a Dutch home with SolarEdge panels.
-Tracks solar production, grid import/export, models battery storage, and visualises
-self-consumption vs. salderingsregeling exposure — all from your own data.
-
 > **⚠️ Hardware & contract specific**
 > This project is wired to specific hardware (P1 smart meter, SolarEdge inverter) and
 > Dutch energy supplier APIs. Expect significant tinkering to adapt it to your setup.
 > It is shared as a reference, not a turnkey product.
 
 ---
+
+https://github.com/janwijbrand/solar-self-consumption-dashboard
+
+A self-hosted solar energy monitoring dashboard for a Dutch home with SolarEdge panels.
+Tracks solar production, grid import/export, models battery storage, and visualises
+self-consumption vs. salderingsregeling exposure — all from your own data.
 
 ![Dashboard screenshot](docs/screenshot.png)
 
