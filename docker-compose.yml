@@ -10,6 +10,12 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - BATTERY_START=${BATTERY_START}
+      - SITE_LAT=${SITE_LAT:-52.0}
+      - SITE_LON=${SITE_LON:-4.5}
+      - PANEL_TILT=${PANEL_TILT:-35}
+      - PANEL_AZIMUTH=${PANEL_AZIMUTH:-180}
+      - GHI_MAX=${GHI_MAX:-900.0}
+      - BATTERY_KWH=${BATTERY_KWH:-8.0}
     networks:
       - dsmreader
     labels:

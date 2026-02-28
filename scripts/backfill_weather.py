@@ -27,7 +27,7 @@ SITE_LON = float(os.environ["SITE_LON"])
 DATA_START = date.fromisoformat(os.environ["WEATHER_DATA_START"])
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
-HOURLY_VARS = "shortwave_radiation,direct_normal_irradiance,diffuse_radiation"
+HOURLY_VARS = "shortwave_radiation,direct_normal_irradiance,diffuse_radiation,temperature_2m"
 
 DB = dict(
     host=os.environ["DB_HOST"],
@@ -69,6 +69,7 @@ def fetch_year(start: date, end: date) -> list[tuple]:
                 data["shortwave_radiation"][i],
                 data["direct_normal_irradiance"][i],
                 data["diffuse_radiation"][i],
+                data["temperature_2m"][i],
             )
     return list(seen.values())
 
@@ -79,12 +80,13 @@ def upsert(conn, rows: list[tuple]):
             cur,
             """
             INSERT INTO openmeteo.hourly
-                (measured_at, shortwave_radiation, direct_normal_irradiance, diffuse_radiation)
+                (measured_at, shortwave_radiation, direct_normal_irradiance, diffuse_radiation, temperature_2m)
             VALUES %s
             ON CONFLICT (measured_at) DO UPDATE SET
                 shortwave_radiation      = EXCLUDED.shortwave_radiation,
                 direct_normal_irradiance = EXCLUDED.direct_normal_irradiance,
-                diffuse_radiation        = EXCLUDED.diffuse_radiation
+                diffuse_radiation        = EXCLUDED.diffuse_radiation,
+                temperature_2m           = EXCLUDED.temperature_2m
             """,
             rows,
         )

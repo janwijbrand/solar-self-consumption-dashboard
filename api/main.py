@@ -1,14 +1,19 @@
+import logging
 import os
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 import psycopg2
 import psycopg2.extras
+import pvlib
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+log = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -134,39 +139,239 @@ def enrich_with_battery(result: dict, start: datetime, end: datetime, battery_kw
 
 GHI_MAX = float(os.environ.get("GHI_MAX", "900.0"))
 
+SITE_LAT = float(os.environ.get("SITE_LAT", "52.0"))
+SITE_LON = float(os.environ.get("SITE_LON", "4.5"))
+PANEL_TILT = float(os.environ.get("PANEL_TILT", "35"))
+PANEL_AZIMUTH = float(os.environ.get("PANEL_AZIMUTH", "180"))
+
+# ── Forecast calibration (loaded lazily on first /api/forecast request) ────────
+
+_forecast_calib: dict | None = None
+_has_temp_col: bool | None = None
+
+
+def _load_forecast_calibration() -> dict:
+    """Compute per-month POA ceilings and hour×month GHI correction factors.
+
+    Steps 1, 2, and 3 of the forecast accuracy plan are prepared here:
+    - monthly_poa_max  — historical max POA per month (pvlib, step 1 for POA)
+    - monthly_ghi_max  — historical max GHI per month (fallback, step 1)
+    - calibration_ghi  — mean(production_w / ghi) per (month, hour) (step 2)
+
+    All data comes from tables already in the DB; no new sources required.
+    """
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            # Step 1: per-month GHI ceilings from historical observations
+            cur.execute("""
+                SELECT
+                    EXTRACT(MONTH FROM measured_at AT TIME ZONE 'Europe/Amsterdam')::int,
+                    MAX(shortwave_radiation)
+                FROM openmeteo.hourly
+                WHERE shortwave_radiation IS NOT NULL
+                GROUP BY 1
+            """)
+            monthly_ghi_max = {int(r[0]): float(r[1]) for r in cur.fetchall() if r[1] is not None}
+
+            # Historical clear-sky hours: averaged production + hourly irradiance
+            cur.execute("""
+                SELECT
+                    date_trunc('hour', p.measured_at)   AS utc_hour,
+                    AVG(p.power_w)                      AS avg_power_w,
+                    MAX(w.shortwave_radiation)           AS ghi,
+                    MAX(w.direct_normal_irradiance)      AS dni,
+                    MAX(w.diffuse_radiation)             AS dhi
+                FROM solaredge.production p
+                JOIN openmeteo.hourly w
+                  ON date_trunc('hour', p.measured_at) = w.measured_at
+                WHERE w.shortwave_radiation > 50
+                GROUP BY 1
+                HAVING AVG(p.power_w) > 0
+                ORDER BY 1
+            """)
+            hist_rows = cur.fetchall()
+
+    monthly_poa_max: dict[int, float] = {}
+    calibration_ghi: dict[tuple[int, int], float] = {}
+
+    if hist_rows:
+        utc_index = pd.to_datetime([r[0] for r in hist_rows], utc=True)
+        ams_index = utc_index.tz_convert("Europe/Amsterdam")
+
+        ghi_s = pd.Series([float(r[2] or 0) for r in hist_rows], index=ams_index)
+        dni_s = pd.Series([float(r[3] or 0) for r in hist_rows], index=ams_index)
+        dhi_s = pd.Series([float(r[4] or 0) for r in hist_rows], index=ams_index)
+
+        # Step 3: compute POA irradiance for all historical rows (pvlib)
+        location = pvlib.location.Location(SITE_LAT, SITE_LON, tz="Europe/Amsterdam")
+        solpos = location.get_solarposition(ams_index)
+        dni_extra = pvlib.irradiance.get_extra_radiation(ams_index)
+        poa_s = (
+            pvlib.irradiance.get_total_irradiance(
+                surface_tilt=PANEL_TILT,
+                surface_azimuth=PANEL_AZIMUTH,
+                solar_zenith=solpos["apparent_zenith"],
+                solar_azimuth=solpos["azimuth"],
+                dni=dni_s,
+                ghi=ghi_s,
+                dhi=dhi_s,
+                dni_extra=dni_extra,
+                model="haydavies",
+            )["poa_global"]
+            .clip(lower=0)
+            .fillna(0)
+        )
+
+        # Monthly POA ceiling (step 1 applied to POA)
+        for m in range(1, 13):
+            mask = ams_index.month == m
+            if mask.any():
+                monthly_poa_max[m] = float(poa_s[mask].max())
+
+        # Step 2: GHI correction factor per (month, hour)
+        prod_s = pd.Series([float(r[1]) for r in hist_rows], index=ams_index)
+        df = pd.DataFrame(
+            {
+                "month": ams_index.month,
+                "hour": ams_index.hour,
+                "ghi": ghi_s.values,
+                "production": prod_s.values,
+            }
+        )
+        df = df[df["ghi"] > 50].copy()
+        df["ratio"] = df["production"] / df["ghi"]
+        calibration_ghi = df.groupby(["month", "hour"])["ratio"].mean().to_dict()
+
+    return {
+        "monthly_ghi_max": monthly_ghi_max,
+        "monthly_poa_max": monthly_poa_max,
+        "calibration_ghi": calibration_ghi,
+    }
+
+
+def _get_calibration() -> dict:
+    global _forecast_calib
+    if _forecast_calib is None:
+        try:
+            _forecast_calib = _load_forecast_calibration()
+        except Exception as e:
+            log.warning("Could not load forecast calibration: %s", e)
+            _forecast_calib = {
+                "monthly_ghi_max": {},
+                "monthly_poa_max": {},
+                "calibration_ghi": {},
+            }
+    return _forecast_calib
+
+
+def _check_temp_col() -> bool:
+    """Return True if temperature_2m column exists in openmeteo.hourly."""
+    global _has_temp_col
+    if _has_temp_col is None:
+        try:
+            with get_db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = 'openmeteo' AND table_name = 'hourly'
+                          AND column_name = 'temperature_2m'
+                    """)
+                    _has_temp_col = cur.fetchone() is not None
+        except Exception:
+            _has_temp_col = False
+    return _has_temp_col
+
 
 @app.get("/api/forecast")
 def solar_forecast():
-    """Next 24 hours of solar potential as % of clear-sky maximum GHI."""
+    """Next 24 hours of solar potential as % of calibrated clear-sky maximum.
+
+    Uses pvlib to compute plane-of-array (POA) irradiance for the tilted panel
+    surface (step 3), normalised by the per-month historical POA ceiling (step 1).
+    Temperature derating is applied when temperature_2m data is available (step 4).
+    The hour×month GHI calibration table (step 2) is also computed at startup
+    but POA already accounts for panel geometry so it is not applied on top.
+    """
+    calib = _get_calibration()
+    has_temp = _check_temp_col()
+
     now = datetime.now(TZ)
     start = datetime(now.year, now.month, now.day, now.hour, tzinfo=TZ)
     end = start + timedelta(hours=24)
 
+    temp_col = "temperature_2m" if has_temp else "NULL"
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
-                    measured_at AT TIME ZONE 'Europe/Amsterdam' AS local_hour,
-                    shortwave_radiation
+                    measured_at,
+                    shortwave_radiation,
+                    direct_normal_irradiance,
+                    diffuse_radiation,
+                    {temp_col}
                 FROM openmeteo.hourly
                 WHERE measured_at >= %s AND measured_at < %s
                 ORDER BY measured_at
-            """,
+                """,
                 (start, end),
             )
             rows = cur.fetchall()
 
-    return {
-        "hours": [
+    if not rows:
+        return {"hours": []}
+
+    utc_index = pd.to_datetime([r[0] for r in rows], utc=True)
+    ams_index = utc_index.tz_convert("Europe/Amsterdam")
+
+    ghi_s = pd.Series([float(r[1] or 0) for r in rows], index=ams_index)
+    dni_s = pd.Series([float(r[2] or 0) for r in rows], index=ams_index)
+    dhi_s = pd.Series([float(r[3] or 0) for r in rows], index=ams_index)
+    temp_s = pd.Series([float(r[4]) if r[4] is not None else 25.0 for r in rows], index=ams_index)
+
+    # Step 3: POA irradiance on the tilted panel surface (pvlib Hay-Davies)
+    location = pvlib.location.Location(SITE_LAT, SITE_LON, tz="Europe/Amsterdam")
+    solpos = location.get_solarposition(ams_index)
+    dni_extra = pvlib.irradiance.get_extra_radiation(ams_index)
+    poa_s = (
+        pvlib.irradiance.get_total_irradiance(
+            surface_tilt=PANEL_TILT,
+            surface_azimuth=PANEL_AZIMUTH,
+            solar_zenith=solpos["apparent_zenith"],
+            solar_azimuth=solpos["azimuth"],
+            dni=dni_s,
+            ghi=ghi_s,
+            dhi=dhi_s,
+            dni_extra=dni_extra,
+            model="haydavies",
+        )["poa_global"]
+        .clip(lower=0)
+        .fillna(0)
+    )
+
+    monthly_poa_max = calib["monthly_poa_max"]
+    monthly_ghi_max = calib["monthly_ghi_max"]
+
+    hours = []
+    for local_ts, poa_val, ghi_val, temp_val in zip(ams_index, poa_s, ghi_s, temp_s):
+        month = local_ts.month
+
+        # Step 1: per-month normalisation; prefer POA ceiling, fall back to GHI / global
+        ceiling = monthly_poa_max.get(month) or monthly_ghi_max.get(month) or GHI_MAX
+        raw_ratio = float(poa_val) / ceiling if ceiling > 0 else 0.0
+
+        # Step 4: temperature derating — standard PV coefficient −0.4 %/°C above 25 °C
+        temp_factor = 1.0 - max(0.0, float(temp_val) - 25.0) * 0.004
+
+        hours.append(
             {
-                "hour": row[0].strftime("%H"),
-                "potential_pct": min(100, round(float(row[1] or 0) / GHI_MAX * 100)),
-                "is_daytime": float(row[1] or 0) > 0,
+                "hour": local_ts.strftime("%H"),
+                "potential_pct": min(100, round(raw_ratio * temp_factor * 100)),
+                "is_daytime": float(poa_val) > 0,
             }
-            for row in rows
-        ]
-    }
+        )
+
+    return {"hours": hours}
 
 
 @app.get("/api/hello")
