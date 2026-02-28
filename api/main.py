@@ -255,6 +255,12 @@ def _get_calibration() -> dict:
     if _forecast_calib is None:
         try:
             _forecast_calib = _load_forecast_calibration()
+            log.info(
+                "Forecast calibration loaded: monthly POA maxima for %d months, "
+                "%d hour×month GHI correction factors",
+                len(_forecast_calib["monthly_poa_max"]),
+                len(_forecast_calib["calibration_ghi"]),
+            )
         except Exception as e:
             log.warning("Could not load forecast calibration: %s", e)
             _forecast_calib = {
