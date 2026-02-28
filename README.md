@@ -32,7 +32,20 @@ A self-hosted solar energy monitoring dashboard for a Dutch home with SolarEdge 
 Tracks solar production, grid import/export, models battery storage, and visualises
 self-consumption vs. salderingsregeling exposure — all from your own data.
 
-![Dashboard screenshot](docs/screenshot.png)
+## Dashboard walkthrough
+
+![Annotated dashboard](docs/screenshot-annotated.png)
+
+| # | Element | Description |
+|---|---------|-------------|
+| 1 | **Battery size** | Dropdown to select simulated battery capacity (0–30 kWh). Changes cascade live to the chart and summary panels so you can compare scenarios instantly. |
+| 2 | **Time / refresh** | Shows the time of the last data fetch. Click to refresh manually; the dashboard also auto-refreshes every 60 seconds. |
+| 3 | **Solar opportunity forecast** | 24-hour bar chart of expected solar potential as a percentage of the clear-sky ceiling. Orange bars = meaningful production expected; grey = little or none. Sunrise/sunset icons mark the transition. Helps decide when to run high-load appliances. |
+| 4 | **Live power strip** | Real-time instantaneous readings: solar production (W), total household consumption (W), grid import or export (W), and simulated battery state of charge (%). |
+| 5 | **Today's production chart** | 15-minute resolution chart for the current day. Solid lines: actual solar (amber), grid import (blue), grid export (green). Dashed lines: what import/export would look like with the selected battery size. |
+| 6 | **Today summary** | kWh breakdown for today: solar produced, self-consumed, exported to grid, total consumed, and drawn from grid. |
+| 7 | **This week summary** | Same kWh breakdown aggregated from Monday to now. |
+| 8 | **Battery simulation bars** | Progress bars showing solar self-consumption rate and grid consumption rate — both actual (solid) and simulated with battery (→ arrow). Lets you see at a glance how much a battery would improve self-sufficiency. |
 
 ---
 
@@ -192,23 +205,6 @@ npm run dev     # dev server with HMR at http://localhost:5173
 ```
 
 The Vite dev server proxies `/api` to `http://localhost:8000` by default.
-
----
-
-## Dashboard walkthrough
-
-![Annotated dashboard](docs/screenshot-annotated.png)
-
-| # | Element | Description |
-|---|---------|-------------|
-| 1 | **Battery size** | Dropdown to select simulated battery capacity (0–30 kWh). Changes cascade live to the chart and summary panels so you can compare scenarios instantly. |
-| 2 | **Time / refresh** | Shows the time of the last data fetch. Click to refresh manually; the dashboard also auto-refreshes every 60 seconds. |
-| 3 | **Solar opportunity forecast** | 24-hour bar chart of expected solar potential as a percentage of the clear-sky ceiling. Orange bars = meaningful production expected; grey = little or none. Sunrise/sunset icons mark the transition. Helps decide when to run high-load appliances. |
-| 4 | **Live power strip** | Real-time instantaneous readings: solar production (W), total household consumption (W), grid import or export (W), and simulated battery state of charge (%). |
-| 5 | **Today's production chart** | 15-minute resolution chart for the current day. Solid lines: actual solar (amber), grid import (blue), grid export (green). Dashed lines: what import/export would look like with the selected battery size. |
-| 6 | **Today summary** | kWh breakdown for today: solar produced, self-consumed, exported to grid, total consumed, and drawn from grid. |
-| 7 | **This week summary** | Same kWh breakdown aggregated from Monday to now. |
-| 8 | **Battery simulation bars** | Progress bars showing solar self-consumption rate and grid consumption rate — both actual (solid) and simulated with battery (→ arrow). Lets you see at a glance how much a battery would improve self-sufficiency. |
 
 ---
 
