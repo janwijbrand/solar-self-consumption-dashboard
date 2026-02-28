@@ -1,0 +1,25 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DB_HOST=dsmrdb
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - BATTERY_START=${BATTERY_START}
+    networks:
+      - dsmreader
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.energy.entrypoints=websecure"
+      - "traefik.http.routers.energy.rule=Host(`${DASHBOARD_HOST}`)"
+      - "traefik.http.routers.energy.tls=true"
+      - "traefik.http.services.energy.loadbalancer.server.port=8000"
+      - "traefik.http.services.energy.loadbalancer.server.scheme=http"
+
+networks:
+  dsmreader:
+    external: true
