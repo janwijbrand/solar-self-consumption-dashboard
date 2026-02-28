@@ -143,6 +143,7 @@ SITE_LAT = float(os.environ.get("SITE_LAT", "52.0"))
 SITE_LON = float(os.environ.get("SITE_LON", "4.5"))
 PANEL_TILT = float(os.environ.get("PANEL_TILT", "35"))
 PANEL_AZIMUTH = float(os.environ.get("PANEL_AZIMUTH", "180"))
+PANEL_TEMP_COEF = float(os.environ.get("PANEL_TEMP_COEF", "0.0040"))
 
 # ── Forecast calibration (loaded lazily on first /api/forecast request) ────────
 
@@ -360,8 +361,8 @@ def solar_forecast():
         ceiling = monthly_poa_max.get(month) or monthly_ghi_max.get(month) or GHI_MAX
         raw_ratio = float(poa_val) / ceiling if ceiling > 0 else 0.0
 
-        # Step 4: temperature derating — standard PV coefficient −0.4 %/°C above 25 °C
-        temp_factor = 1.0 - max(0.0, float(temp_val) - 25.0) * 0.004
+        # Step 4: temperature derating per PANEL_TEMP_COEF (fraction per °C above 25 °C)
+        temp_factor = 1.0 - max(0.0, float(temp_val) - 25.0) * PANEL_TEMP_COEF
 
         hours.append(
             {

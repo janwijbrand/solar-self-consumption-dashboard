@@ -14,6 +14,7 @@ services:
       - SITE_LON=${SITE_LON:-4.5}
       - PANEL_TILT=${PANEL_TILT:-35}
       - PANEL_AZIMUTH=${PANEL_AZIMUTH:-180}
+      - PANEL_TEMP_COEF=${PANEL_TEMP_COEF:-0.0040}
       - GHI_MAX=${GHI_MAX:-900.0}
       - BATTERY_KWH=${BATTERY_KWH:-8.0}
     networks:
