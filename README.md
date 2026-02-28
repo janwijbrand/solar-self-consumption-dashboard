@@ -19,10 +19,10 @@
 
 ---
 
-> **⚠️ Hardware & contract specific**
-> This project is wired to specific hardware (P1 smart meter, SolarEdge inverter) and
-> Dutch energy supplier APIs. Expect significant tinkering to adapt it to your setup.
-> It is shared as a reference, not a turnkey product.
+> **⚠️ Hardware & contract specific** This project is wired to specific hardware
+> (P1 smart meter, SolarEdge inverter) and Dutch energy supplier APIs. Expect
+> significant tinkering to adapt it to your setup. It is shared as a reference,
+> not a turnkey product.
 
 ---
 
