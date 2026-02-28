@@ -220,9 +220,6 @@ docker --context p1 exec energy-dashboard-1 python scripts/report.py last-week
 docker --context p1 exec energy-dashboard-1 python scripts/report.py 2025-01-01 2025-12-31
 ```
 
-**Pi cleanup** — once you confirm collection is working via the container, remove the old
-cron entries (`crontab -e` on the Pi) and optionally `rm -rf ~/src/energy`.
-
 ---
 
 ## Development
