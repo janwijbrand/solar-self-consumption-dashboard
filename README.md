@@ -1,5 +1,24 @@
 # Energy Dashboard
 
+---
+
+> ### ✍️ Meta-readme and disclaimer
+>
+> *This project was created with two goals: learning how Claude Code works and
+> to, indeed, create a simple self-hosted dahboard that should give me insights
+> in our solar product, solar self-consumption, grid energy import and export
+> and how a home battery could increase self-consumption.*
+>
+> *All with an eye on the rapidly changing landscape of using LLMs to produce
+> meaningful output and functional code and products and to prepare for the end
+> of the so-called "Salderingsregeling" on January 1st 2027 in the Netherlands.*
+>
+> *I tried to be aware and careful of the output that was produced while
+> "vibing". I cannot accept any liability or whatsoever when you want to
+> experiment with this code.*
+
+---
+
 https://github.com/janwijbrand/solar-self-consumption-dashboard
 
 A self-hosted solar energy monitoring dashboard for a Dutch home with SolarEdge panels.
