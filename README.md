@@ -13,6 +13,10 @@ self-consumption vs. salderingsregeling exposure — all from your own data.
 
 ---
 
+![Dashboard screenshot](docs/screenshot.png)
+
+---
+
 ## Use cases
 
 - **Self-consumption insights** — how much solar do you actually use vs. export?
