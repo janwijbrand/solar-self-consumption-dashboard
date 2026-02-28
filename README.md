@@ -6,7 +6,7 @@
 >
 > *This project was created with two goals: learning how Claude Code works and
 > to, indeed, create a simple self-hosted dahboard that should give me insights
-> in our solar product, solar self-consumption, grid energy import and export
+> in our solar production, solar self-consumption, grid energy import and export
 > and how a home battery could increase self-consumption.*
 >
 > *All with an eye on the rapidly changing landscape of using LLMs to produce
