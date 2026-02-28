@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 
 [project.urls]
-Repository = "https://github.com/..."   # placeholder
+Repository = "https://github.com/janwijbrand/solar-self-consumption-dashboard"
 
 [tool.ruff]
 line-length = 100
