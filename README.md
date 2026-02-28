@@ -74,7 +74,8 @@ self-consumption vs. salderingsregeling exposure — all from your own data.
 │  ┌──────────────────┐   ┌───────────────────────────┐   │
 │  │  energy-dashboard│   │  dsmr (DSMR-reader)       │   │
 │  │  FastAPI + Vue   │   │  reads P1 smart meter     │   │
-│  │  :8000 → Traefik │   └──────────────┬────────────┘   │
+│  │  crond (collect) │   └──────────────┬────────────┘   │
+│  │  :8000 → Traefik │                  │                │
 │  └────────┬─────────┘                  │                │
 │           │                            │                │
 │  ┌────────▼────────────────────────────▼─────────────┐  │
@@ -85,8 +86,7 @@ self-consumption vs. salderingsregeling exposure — all from your own data.
 │  │  public.dsmr_*          (DSMR-reader's own tables)│  │
 │  └───────────────────────────────────────────────────┘  │
 │                                                         │
-│  cron: scripts/collect.py         every 15 min          │
-│  cron: scripts/collect_weather.py every 15 min          │
+│  (cron runs inside energy-dashboard container)          │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -146,7 +146,6 @@ in memory for the lifetime of the process:
 **Software on the Pi**
 - Docker + Docker Compose
 - [DSMR-reader](https://github.com/xirixiz/dsmr-reader-docker) running and reading the P1 port
-- Python 3.11+ and a virtualenv for the collection scripts
 
 **Accounts / APIs**
 - SolarEdge monitoring account → API key (300 req/day free tier)
@@ -205,31 +204,24 @@ The dashboard is served via Traefik on your Tailscale network (see `docker-compo
 
 ## Data collection scripts
 
-Install dependencies on the Pi:
+The collection scripts run inside the dashboard container via BusyBox crond — no separate
+venv or crontab on the Pi is needed. They start automatically on `make deploy`.
+
+**One-time backfills** (run once after initial deploy):
 ```bash
-cd ~/src/energy
-python3 -m venv .venv
-.venv/bin/pip install -r scripts/requirements.txt
+docker --context p1 exec energy-dashboard-1 python scripts/backfill.py
+docker --context p1 exec energy-dashboard-1 python scripts/backfill_weather.py
 ```
 
-Add to crontab (`crontab -e` on the Pi):
-```
-*/15 * * * * /home/user/src/energy/.venv/bin/python /home/user/src/energy/scripts/collect.py
-*/15 * * * * /home/user/src/energy/.venv/bin/python /home/user/src/energy/scripts/collect_weather.py
+**CLI report** (run inside the container):
+```bash
+docker --context p1 exec energy-dashboard-1 python scripts/report.py today
+docker --context p1 exec energy-dashboard-1 python scripts/report.py last-week
+docker --context p1 exec energy-dashboard-1 python scripts/report.py 2025-01-01 2025-12-31
 ```
 
-**One-time backfills** (run once on the Pi):
-```bash
-.venv/bin/python scripts/backfill.py          # full SolarEdge history
-.venv/bin/python scripts/backfill_weather.py  # full Open-Meteo ERA5 history
-```
-
-**CLI report:**
-```bash
-.venv/bin/python scripts/report.py today
-.venv/bin/python scripts/report.py last-week
-.venv/bin/python scripts/report.py 2025-01-01 2025-12-31
-```
+**Pi cleanup** — once you confirm collection is working via the container, remove the old
+cron entries (`crontab -e` on the Pi) and optionally `rm -rf ~/src/energy`.
 
 ---
 
