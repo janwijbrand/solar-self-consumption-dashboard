@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("uvicorn.error")
 
 app = FastAPI()
 
