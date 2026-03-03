@@ -24,6 +24,13 @@ function socColor(pct) {
   if (pct >= 30) return 'text-amber-400'
   return 'text-blue-400'
 }
+
+function carbonLabel(g) {
+  if (g === null || g === undefined) return null
+  if (g < 100) return { text: Math.round(g) + ' g · Clean', cls: 'bg-emerald-900 text-emerald-300 ring-1 ring-emerald-700' }
+  if (g < 250) return { text: Math.round(g) + ' g · Mixed', cls: 'bg-amber-900 text-amber-300 ring-1 ring-amber-700' }
+  return { text: Math.round(g) + ' g · Dirty', cls: 'bg-orange-900 text-orange-300 ring-1 ring-orange-700' }
+}
 </script>
 
 <template>
@@ -48,6 +55,10 @@ function socColor(pct) {
         <template v-if="data?.grid_import_w !== null && data?.grid_import_w !== undefined">
           <span v-if="data.grid_export_w > data.grid_import_w" class="text-2xl font-bold text-emerald-400">{{ fmt(data.grid_export_w) }}</span>
           <span v-else class="text-2xl font-bold text-blue-400">{{ fmt(data.grid_import_w) }}</span>
+          <span
+            v-if="data.grid_import_w >= data.grid_export_w && carbonLabel(data.carbon_g_per_kwh)"
+            :class="['text-xs px-1.5 py-0.5 rounded-full font-medium', carbonLabel(data.carbon_g_per_kwh).cls]"
+          >{{ carbonLabel(data.carbon_g_per_kwh).text }}</span>
         </template>
         <span v-else class="text-2xl font-bold text-gray-600">—</span>
       </div>

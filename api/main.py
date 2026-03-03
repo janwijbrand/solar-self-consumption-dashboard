@@ -137,6 +137,33 @@ def enrich_with_battery(result: dict, start: datetime, end: datetime, battery_kw
     return result
 
 
+def fetch_carbon_now(conn) -> float | None:
+    """Most recent carbon intensity within the last 30 minutes."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT co2_g_per_kwh FROM ned.carbon_intensity
+            WHERE measured_at >= NOW() - INTERVAL '30 minutes'
+            ORDER BY measured_at DESC LIMIT 1
+        """)
+        row = cur.fetchone()
+    return float(row[0]) if row and row[0] is not None else None
+
+
+def fetch_carbon_avg(conn, start: datetime, end: datetime) -> float | None:
+    """Weighted-average carbon intensity (gCO₂/kWh) for a time period."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ROUND(SUM(emission_kg * 1000) / NULLIF(SUM(volume_kwh), 0), 1)
+            FROM ned.utilizations
+            WHERE measured_at >= %s AND measured_at < %s
+            """,
+            (start, end),
+        )
+        row = cur.fetchone()
+    return float(row[0]) if row and row[0] is not None else None
+
+
 GHI_MAX = float(os.environ.get("GHI_MAX", "900.0"))
 
 SITE_LAT = float(os.environ.get("SITE_LAT", "52.0"))
@@ -415,6 +442,10 @@ def current_power(battery_kwh: float = BATTERY_KWH):
             dsmr_row = cur.fetchone()
 
         soc_kwh = battery_soc_at(conn, datetime.now(TZ), battery_kwh) if battery_kwh > 0 else None
+        try:
+            carbon_now = fetch_carbon_now(conn)
+        except Exception:
+            carbon_now = None
 
     solar_w = float(solar_row["power_w"]) if solar_row else 0.0
     grid_import_w = float(dsmr_row["grid_import_w"]) if dsmr_row else None
@@ -442,6 +473,7 @@ def current_power(battery_kwh: float = BATTERY_KWH):
         "battery_kwh": battery_kwh if battery_kwh > 0 else None,
         "battery_soc_kwh": round(soc_kwh, 2) if soc_kwh is not None else None,
         "battery_soc_pct": round(soc_kwh / battery_kwh * 100) if soc_kwh is not None else None,
+        "carbon_g_per_kwh": carbon_now,
     }
 
 
@@ -537,7 +569,13 @@ def today_summary(battery_kwh: float = BATTERY_KWH):
     now = datetime.now(TZ)
     start = datetime(now.year, now.month, now.day, tzinfo=TZ)
     end = start + timedelta(days=1)
-    return enrich_with_battery(summary_for_range(start, end), start, end, battery_kwh)
+    result = enrich_with_battery(summary_for_range(start, end), start, end, battery_kwh)
+    with get_db() as conn:
+        try:
+            result["avg_carbon_g_per_kwh"] = fetch_carbon_avg(conn, start, now)
+        except Exception:
+            result["avg_carbon_g_per_kwh"] = None
+    return result
 
 
 @app.get("/api/week")
@@ -547,7 +585,13 @@ def week_summary(battery_kwh: float = BATTERY_KWH):
     today = datetime(now.year, now.month, now.day, tzinfo=TZ)
     start = today - timedelta(days=today.weekday())
     end = today + timedelta(days=1)
-    return enrich_with_battery(summary_for_range(start, end), start, end, battery_kwh)
+    result = enrich_with_battery(summary_for_range(start, end), start, end, battery_kwh)
+    with get_db() as conn:
+        try:
+            result["avg_carbon_g_per_kwh"] = fetch_carbon_avg(conn, start, now)
+        except Exception:
+            result["avg_carbon_g_per_kwh"] = None
+    return result
 
 
 @app.get("/api/today/chart")

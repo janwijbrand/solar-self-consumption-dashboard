@@ -1,5 +1,5 @@
 CONTEXT = p1
-DASHBOARD_HOST ?= energy.example.ts.net
+DASHBOARD_HOST ?= energy.your-tailnet.ts.net
 
 # One-time setup: docker context create p1 --docker "host=ssh://docker.host.local"
 # Set your hostname: export DASHBOARD_HOST=energy.your-tailnet.ts.net
@@ -13,6 +13,7 @@ deploy:
 	SOLAREDGE_API_KEY=$(SOLAREDGE_API_KEY) \
 	SOLAREDGE_SITE_ID=$(SOLAREDGE_SITE_ID) \
 	WEATHER_DATA_START=$(WEATHER_DATA_START) \
+	NED_API_KEY=$(NED_API_KEY) \
 	docker --context $(CONTEXT) compose up --build -d
 
 down:

@@ -20,6 +20,7 @@ services:
       - PANEL_TEMP_COEF=${PANEL_TEMP_COEF:-0.0040}
       - GHI_MAX=${GHI_MAX:-900.0}
       - BATTERY_KWH=${BATTERY_KWH:-8.0}
+      - NED_API_KEY=${NED_API_KEY}
     networks:
       - dsmreader
     labels:

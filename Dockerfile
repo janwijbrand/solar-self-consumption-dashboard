@@ -15,7 +15,7 @@ COPY api/ .
 COPY scripts/ ./scripts/
 COPY --from=frontend-build /app/api/dist ./dist
 
-RUN printf '*/15 * * * * . /etc/environment && cd /app && python scripts/collect.py >> /proc/1/fd/1 2>&1\n*/15 * * * * . /etc/environment && cd /app && python scripts/collect_weather.py >> /proc/1/fd/1 2>&1\n' > /etc/crontabs/root
+RUN printf '*/15 * * * * . /etc/environment && cd /app && python scripts/collect.py >> /proc/1/fd/1 2>&1\n*/15 * * * * . /etc/environment && cd /app && python scripts/collect_weather.py >> /proc/1/fd/1 2>&1\n*/15 * * * * . /etc/environment && cd /app && python scripts/collect_ned.py >> /proc/1/fd/1 2>&1\n' > /etc/crontabs/root
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

@@ -44,6 +44,12 @@ function kwh(val) {
         <div class="text-gray-500 text-xs mb-0.5">Exported to grid</div>
         <div class="text-gray-300 font-semibold text-lg">{{ kwh(data?.grid_export_kwh) }}</div>
       </div>
+
+      <!-- Avg grid carbon intensity -->
+      <div v-if="data?.avg_carbon_g_per_kwh != null">
+        <div class="text-gray-500 text-xs mb-0.5">Avg grid carbon</div>
+        <div class="text-gray-400 font-semibold text-lg">{{ Math.round(data.avg_carbon_g_per_kwh) }} g/kWh</div>
+      </div>
     </div>
 
     <!-- Progress bars -->
