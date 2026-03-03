@@ -446,17 +446,27 @@ def current_power(battery_kwh: float = BATTERY_KWH):
 
 
 def summary_for_range(start: datetime, end: datetime) -> dict:
+    now = datetime.now(TZ)
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT COALESCE(SUM(power_w) * 0.25 / 1000, 0)
+                SELECT COALESCE(SUM(power_w) * 0.25 / 1000, 0), MAX(measured_at)
                 FROM solaredge.production
                 WHERE measured_at >= %s AND measured_at < %s
             """,
                 (start, end),
             )
-            solar_kwh = float(cur.fetchone()[0])
+            solar_kwh, solar_max = cur.fetchone()
+            solar_kwh = float(solar_kwh)
+
+            # Cap DSMR queries at the latest solar data point + one interval so
+            # that the grid totals cover the same window as the solar total.
+            # Only applied for live ranges (end in the future); historical ranges
+            # are already complete so solar_max ≈ end.
+            grid_end = end
+            if solar_max is not None and end > now:
+                grid_end = min(end, solar_max + timedelta(minutes=15))
 
             cur.execute(
                 """
@@ -464,7 +474,7 @@ def summary_for_range(start: datetime, end: datetime) -> dict:
                 FROM dsmr_consumption_electricityconsumption
                 WHERE read_at >= %s AND read_at < %s
             """,
-                (start, end),
+                (start, grid_end),
             )
             dsmr_first, dsmr_count = cur.fetchone()
 
@@ -480,14 +490,14 @@ def summary_for_range(start: datetime, end: datetime) -> dict:
                     FROM dsmr_consumption_electricityconsumption
                     WHERE read_at >= %s AND read_at < %s
                 """,
-                    (start, end),
+                    (start, grid_end),
                 )
                 row = cur.fetchone()
                 grid_import = float(row[0])
                 grid_export = float(row[1])
                 sources.append("DSMR")
 
-            pe_end = dsmr_first if dsmr_count else end
+            pe_end = dsmr_first if dsmr_count else grid_end
             cur.execute(
                 """
                 SELECT COALESCE(SUM(grid_import), 0), COALESCE(SUM(grid_export), 0), COUNT(*)
@@ -562,6 +572,15 @@ def today_chart(battery_kwh: float = BATTERY_KWH):
             )
             solar_rows = cur.fetchall()
 
+            # Cap DSMR at solar cutoff + one interval so both series cover the
+            # same window and no DSMR-only buckets appear beyond solar data.
+            # AT TIME ZONE returns naive timestamps so attach TZ before comparing.
+            if solar_rows:
+                solar_max = max(ts for ts, _ in solar_rows).replace(tzinfo=TZ)
+                chart_end = min(end, solar_max + timedelta(minutes=15))
+            else:
+                chart_end = end
+
             # DSMR aggregated to 15-min buckets
             cur.execute(
                 """
@@ -577,7 +596,7 @@ def today_chart(battery_kwh: float = BATTERY_KWH):
                 GROUP BY bucket
                 ORDER BY bucket
             """,
-                (start, end),
+                (start, chart_end),
             )
             dsmr_rows = cur.fetchall()
 
