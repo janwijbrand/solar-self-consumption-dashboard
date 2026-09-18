@@ -253,3 +253,7 @@ The Vite dev server proxies `/api` to `http://localhost:8000` by default.
 - **Forecast calibration on first request**: the first `/api/forecast` call after a
   container restart joins years of production and weather data to build the monthly POA
   ceilings. This takes ~2 seconds and is then cached for the lifetime of the process.
+
+## License
+
+[MIT](LICENSE) © 2026 Jan-Wijbrand Kolman

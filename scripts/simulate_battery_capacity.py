@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Jan-Wijbrand Kolman
+# SPDX-License-Identifier: MIT
 """
 Battery capacity sensitivity analysis for 2025.
 

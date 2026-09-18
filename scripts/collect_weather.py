@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Jan-Wijbrand Kolman
+# SPDX-License-Identifier: MIT
 """
 Collect hourly irradiance data from Open-Meteo (recent past + short forecast)
 into openmeteo.hourly. Run every 15 minutes via cron alongside collect.py.

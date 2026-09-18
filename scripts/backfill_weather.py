@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Jan-Wijbrand Kolman
+# SPDX-License-Identifier: MIT
 """
 Backfill historical hourly irradiance data from Open-Meteo ERA5 archive
 into openmeteo.hourly.

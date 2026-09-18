@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Jan-Wijbrand Kolman -->
+<!-- SPDX-License-Identifier: MIT -->
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import CurrentPower from './components/CurrentPower.vue'

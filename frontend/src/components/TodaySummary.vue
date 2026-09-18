@@ -1,3 +1,5 @@
+<!-- SPDX-FileCopyrightText: 2026 Jan-Wijbrand Kolman -->
+<!-- SPDX-License-Identifier: MIT -->
 <script setup>
 defineProps({
   data: Object,

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Jan-Wijbrand Kolman
+# SPDX-License-Identifier: MIT
 """
 Calculate electricity consumed from the grid for a given time interval.
 Timestamps are interpreted as Europe/Amsterdam local time.
