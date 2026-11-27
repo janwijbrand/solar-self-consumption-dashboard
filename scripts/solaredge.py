@@ -73,10 +73,11 @@ def _token_request(payload: dict) -> dict:
     return resp.json()
 
 
-def exchange_code(code: str, redirect_uri: str) -> dict:
-    return _token_request(
-        {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri}
-    )
+def exchange_code(code: str) -> dict:
+    # No redirect_uri: authorize_url() doesn't send one, so RFC 6749 §4.1.3 doesn't
+    # require it here, and SolarEdge's Authentication page omits it as well. Echoing
+    # the browser's URL back could fail an exact match (browsers add a trailing "/").
+    return _token_request({"grant_type": "authorization_code", "code": code})
 
 
 def save_tokens(conn, tokens: dict) -> None:

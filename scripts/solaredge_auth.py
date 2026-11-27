@@ -30,7 +30,7 @@ import json
 import os
 import sys
 from datetime import UTC, datetime, timedelta
-from urllib.parse import parse_qs, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit
 
 import psycopg2
 import solaredge
@@ -59,8 +59,7 @@ def main():
         print("Then run this script again with the full URL from the address bar.")
         return
 
-    parts = urlsplit(sys.argv[1])
-    query = parse_qs(parts.query)
+    query = parse_qs(urlsplit(sys.argv[1]).query)
     if "error" in query:
         fail(f"approval failed: {query['error'][0]} {query.get('error_description', [''])[0]}")
     code = query.get("code", [None])[0]
@@ -71,10 +70,8 @@ def main():
         # Checked before the exchange, so the code isn't used up.
         fail(f"approved site {site_id}, but SOLAREDGE_SITE_ID is {solaredge.SITE_ID}")
 
-    # The token request must name the same Redirect URI the browser was sent to.
-    redirect_uri = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
     try:
-        tokens = solaredge.exchange_code(code, redirect_uri)
+        tokens = solaredge.exchange_code(code)
     except solaredge.SolarEdgeError as e:
         fail(str(e))
 
