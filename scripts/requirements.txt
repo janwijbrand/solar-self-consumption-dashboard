@@ -1,2 +1,4 @@
 httpx
 psycopg2-binary
+pandas
+pvlib

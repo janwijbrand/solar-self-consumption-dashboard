@@ -141,14 +141,17 @@ in memory for the lifetime of the process:
 
 **Hardware**
 - Raspberry Pi (or similar) connected to your P1 smart meter
-- SolarEdge solar inverter with monitoring enabled, Solar Edge API key
+- SolarEdge solar inverter with monitoring enabled
 
 **Software on the Pi**
 - Docker + Docker Compose
 - [DSMR-reader](https://github.com/xirixiz/dsmr-reader-docker) running and reading the P1 port
 
 **Accounts / APIs**
-- SolarEdge monitoring account → API key (300 req/day free tier)
+- SolarEdge site-owner login, plus a free developer account at
+  [developer.solaredge.com](https://developer.solaredge.com) with a **Site Access** app
+  (Monitoring API V2, OAuth). The old V1 API key access was retired on 2026-11-03.
+  The free tier allows 2,000 calls per month and 10 per minute.
 - Optional: hourly grid import/export export from your energy supplier (for historical data pre-DSMR)
 
 ---
@@ -161,6 +164,9 @@ Run these in order against your `dsmrreader` database (or whatever database DSMR
 psql -U dsmrreader_user -d dsmrreader -f sql/01_solaredge.sql
 psql -U dsmrreader_user -d dsmrreader -f sql/02_pureenergie.sql
 psql -U dsmrreader_user -d dsmrreader -f sql/03_openmeteo.sql
+psql -U dsmrreader_user -d dsmrreader -f sql/04_temperature.sql
+psql -U dsmrreader_user -d dsmrreader -f sql/05_ned.sql
+psql -U dsmrreader_user -d dsmrreader -f sql/06_solaredge_oauth.sql
 ```
 
 DSMR-reader manages its own `public.dsmr_*` tables — see that project's docs.
@@ -207,11 +213,26 @@ The dashboard is served via Traefik on your Tailscale network (see `docker-compo
 The collection scripts run inside the dashboard container via BusyBox crond — no separate
 venv or crontab on the Pi is needed. They start automatically on `make deploy`.
 
+**SolarEdge approval** (once after the first deploy, and again if the collector says the
+grant is gone, e.g. after 14 days without a successful token refresh):
+```bash
+docker --context p1 exec energy-dashboard-1 python scripts/solaredge_auth.py
+# open the printed link, sign in as the site owner, approve; then pass the URL
+# the browser landed on (it may show an error page; that's fine):
+docker --context p1 exec energy-dashboard-1 python scripts/solaredge_auth.py '<that URL>'
+```
+
+`collect.py` runs every 20 minutes while the sun is up, to stay within the free V2 tier.
+Each run fetches everything since the last stored row, so gaps fill themselves.
+
 **One-time backfills** (run once after initial deploy):
 ```bash
-docker --context p1 exec energy-dashboard-1 python scripts/backfill.py
+docker --context p1 exec energy-dashboard-1 python scripts/backfill.py   # still V1, see below
 docker --context p1 exec energy-dashboard-1 python scripts/backfill_weather.py
 ```
+
+`backfill.py` still uses the retired V1 API and needs porting to V2. Until then, a SolarEdge
+CSV export plus `scripts/import_solaredge_csv.py` can load history.
 
 **CLI report** (run inside the container):
 ```bash
