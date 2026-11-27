@@ -28,7 +28,34 @@ const batteryOptions = [
   { label: '30 kWh',     value: 30 },
 ]
 
+// Sources that stopped updating, from /api/freshness. Fetched on its own and
+// errors are ignored: the banner is a hint and must never break the dashboard.
+const stale = ref([])
+
+async function fetchFreshness() {
+  try {
+    const r = await fetch('/api/freshness')
+    if (r.ok) stale.value = (await r.json()).stale
+  } catch {
+    // keep the previous state
+  }
+}
+
+function describeLatest(iso) {
+  const d = new Date(iso)
+  const when = d.toLocaleString('nl-NL', {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  })
+  const hours = (Date.now() - d.getTime()) / 3_600_000
+  if (hours < 0) return `forecast ends ${when}`
+  const ago = hours >= 48 ? `${Math.round(hours / 24)} days`
+    : hours >= 1 ? `${Math.round(hours)} h`
+    : `${Math.round(hours * 60)} min`
+  return `last data ${when} (${ago} ago)`
+}
+
 async function fetchAll() {
+  fetchFreshness()
   const bq = `?battery_kwh=${batteryKwh.value}`
   const [c, t, w, ch, fc] = await Promise.all([
     fetch(`/api/current?battery_kwh=${batteryKwh.value}`).then(r => r.json()),
@@ -74,6 +101,18 @@ onUnmounted(() => clearInterval(timer))
           class="text-xs text-gray-500 hover:text-white transition-colors"
         >↻ refresh</button>
       </div>
+    </div>
+
+    <!-- Data stopped updating -->
+    <div
+      v-if="stale.length"
+      class="flex-shrink-0 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+    >
+      <span class="font-semibold">⚠ Data stopped updating:</span>
+      <span v-for="(s, i) in stale" :key="s.source">
+        {{ i ? ' · ' : ' ' }}{{ s.source }}, {{ describeLatest(s.latest) }}
+      </span>
+      <span class="text-rose-200/60"> — check <code>make logs</code></span>
     </div>
 
     <!-- Content: stacked column that fills remaining viewport height -->

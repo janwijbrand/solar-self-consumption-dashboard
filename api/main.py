@@ -3,7 +3,7 @@
 import logging
 import os
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -415,16 +415,73 @@ def hello():
     return {"message": "Hello from the energy dashboard API"}
 
 
+# ── Data freshness (drives the dashboard's "data stopped" banner) ─────────────
+# Only sources that have data but stopped updating are flagged; an empty table
+# (e.g. NED not configured) is not an alarm.
+
+# Solar only arrives in daylight, so count daylight hours since the last row.
+# Normal is under ~0.6 h (20-min polling + one 15-min interval).
+SOLAR_MAX_DAYLIGHT_GAP_H = 1.5
+DSMR_MAX_AGE = timedelta(minutes=10)  # DSMR-reader writes one row per minute
+NED_MAX_AGE = timedelta(hours=3)  # NED usually lags ~30 min
+WEATHER_MIN_AHEAD = timedelta(hours=12)  # the collector keeps a forecast through tomorrow
+
+
+def _daylight_hours_between(start: datetime, end: datetime) -> float:
+    """Hours with the sun above the horizon between start and end, in 10-min steps.
+
+    Looks back at most 3 days; that is far beyond any threshold used here.
+    """
+    start = max(start, end - timedelta(days=3)).astimezone(UTC)
+    end = end.astimezone(UTC)
+    if start >= end:
+        return 0.0
+    index = pd.date_range(start, end, freq="10min")
+    elevation = pvlib.solarposition.get_solarposition(index, SITE_LAT, SITE_LON)[
+        "apparent_elevation"
+    ]
+    return float((elevation > 0).sum()) / 6
+
+
+@app.get("/api/freshness")
+def data_freshness():
+    """Data sources that stopped updating. An empty "stale" list means all is well."""
+    now = datetime.now(UTC)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    (SELECT MAX(measured_at) FROM solaredge.production),
+                    (SELECT MAX(read_at) FROM dsmr_consumption_electricityconsumption),
+                    (SELECT MAX(measured_at) FROM ned.utilizations),
+                    (SELECT MAX(measured_at) FROM openmeteo.hourly)
+            """)
+            solar, dsmr, ned, weather = cur.fetchone()
+
+    stale = []
+    if solar is not None and _daylight_hours_between(solar, now) > SOLAR_MAX_DAYLIGHT_GAP_H:
+        stale.append({"source": "Solar (SolarEdge)", "latest": solar.isoformat()})
+    if dsmr is not None and now - dsmr > DSMR_MAX_AGE:
+        stale.append({"source": "Grid (P1 meter)", "latest": dsmr.isoformat()})
+    if ned is not None and now - ned > NED_MAX_AGE:
+        stale.append({"source": "Grid carbon (NED)", "latest": ned.isoformat()})
+    if weather is not None and weather - now < WEATHER_MIN_AHEAD:
+        # The forecast runs ahead of now, so "latest" here is the end of the forecast.
+        stale.append({"source": "Weather forecast", "latest": weather.isoformat()})
+    return {"stale": stale, "checked_at": now.isoformat()}
+
+
 @app.get("/api/current")
 def current_power(battery_kwh: float = BATTERY_KWH):
     """Latest solar production, live grid power, and simulated battery SOC."""
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Latest solar reading (within last 30 min, else 0)
+            # Latest solar reading (within last 45 min, else 0). collect.py polls every
+            # 20 min, so the newest 15-min interval can be ~35 min old just before a run.
             cur.execute("""
                 SELECT power_w, measured_at
                 FROM solaredge.production
-                WHERE measured_at >= NOW() - INTERVAL '30 minutes'
+                WHERE measured_at >= NOW() - INTERVAL '45 minutes'
                 ORDER BY measured_at DESC
                 LIMIT 1
             """)
